@@ -61,7 +61,6 @@ module Orchestration::Compute
       logger.info "Adding Compute instance for #{name}"
       template   = ConfigTemplate.find_template (:kind => "user_data", :operatingsystem_id => self.operatingsystem_id,
                                                  :hostgroup_id => self.hostgroup_id, :environment_id => self.environment_id)
-      @host = self
       user_data = unattended_render(template.template) if template != nil
       self.vm = compute_resource.create_vm compute_attributes.merge(:name => name, :user_data => user_data)
     rescue => e
