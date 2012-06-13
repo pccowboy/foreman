@@ -22,6 +22,9 @@ module Orchestration
       before_save :on_save
       after_commit :post_commit
       after_destroy :on_destroy
+
+      # Need to reset the clone after a save
+      after_save :setup_clone
     end
   end
 
