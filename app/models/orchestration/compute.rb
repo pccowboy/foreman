@@ -3,7 +3,7 @@ module Orchestration::Compute
     base.send :include, InstanceMethods
     base.class_eval do
       attr_accessor :compute_attributes, :vm, :provision_method
-      after_validation :queue_compute
+      after_validation :validate_compute_provisioning, :queue_compute
       before_destroy :queue_compute_destroy
     end
   end
@@ -31,13 +31,15 @@ module Orchestration::Compute
     end
 
     def queue_compute_create
-      queue.create(:name   => "Settings up compute instance #{self}", :priority => 1,
+      queue.create(:name   => "Requesting compute instance #{self}", :priority => 1,
+                   :action => [self, :requestCompute])
+      post_queue.create(:name   => "Setting up compute instance #{self}", :priority => 2,
                    :action => [self, :setCompute])
-      queue.create(:name   => "Acquiring IP address for #{self}", :priority => 2,
+      post_queue.create(:name   => "Acquiring IP address for #{self}", :priority => 3,
                    :action => [self, :setComputeIP]) if compute_resource.provided_attributes.keys.include?(:ip)
-      queue.create(:name   => "Querying instance details for #{self}", :priority => 3,
+      post_queue.create(:name   => "Querying instance details for #{self}", :priority => 4,
                    :action => [self, :setComputeDetails])
-      queue.create(:name   => "Power up compute instance #{self}", :priority => 1000,
+      post_queue.create(:name   => "Power up compute instance #{self}", :priority => 1000,
                    :action => [self, :setComputePowerUp]) if compute_attributes[:start] == '1'
     end
 
@@ -55,6 +57,11 @@ module Orchestration::Compute
       return unless errors.empty? and compute_resource_id.present? and uuid
       queue.create(:name   => "Removing compute instance #{self}", :priority => 100,
                    :action => [self, :delCompute])
+    end
+
+    def requestCompute
+      logger.info "Requesting a compute instance for #{name}"
+      self.vm = compute_resource.new_vm compute_attributes.merge(:name => name)
     end
 
     def setCompute
@@ -179,6 +186,18 @@ module Orchestration::Compute
       return false unless compute_resource.supports_update?
       old.compute_attributes = compute_resource.find_vm_by_uuid(uuid).attributes
       compute_resource.update_required?(old.compute_attributes, compute_attributes.symbolize_keys)
+    end 
+
+    def validate_compute_provisioning
+      return unless compute?
+      return if Rails.env == "test"
+      status = true
+      image_uuid = compute_attributes[:image_id]
+      unless (self.image = Image.find_by_uuid(image_uuid))
+        status &= failure("Must define an Image to use")
+      end
+
+      status
     end
 
   end
