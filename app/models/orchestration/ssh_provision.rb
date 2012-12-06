@@ -114,7 +114,7 @@ module Orchestration::SSHProvision
       status = false
     end
     failure "No user_data or finish templates were found for this host, make sure you define at least one in your #{os} settings" unless status
-    image_uuid = compute_attributes[:image_id]
+    image_uuid = compute_attributes[:image_id] || compute_attributes[:image_ref]
     unless (self.image = Image.find_by_uuid(image_uuid))
       status &= failure("Must define an Image to use")
     end
